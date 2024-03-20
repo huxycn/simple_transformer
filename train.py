@@ -9,10 +9,18 @@ import time
 from torch import nn, optim
 from torch.optim import Adam
 
-from data import *
+# from data import *
+from conf import *
 from models.model.transformer import Transformer
 from util.bleu import idx_to_word, get_bleu
 from util.epoch_timer import epoch_time
+
+from tqdm import tqdm
+
+from data2 import PAD_IDX, BOS_IDX, EOS_IDX, SRC_VOCAB_SIZE, TGT_VOCAB_SIZE, build_dataloader, SRC_LANGUAGE, TGT_LANGUAGE, vocab_transform
+
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def count_parameters(model):
@@ -24,12 +32,12 @@ def initialize_weights(m):
         nn.init.kaiming_uniform(m.weight.data)
 
 
-model = Transformer(src_pad_idx=src_pad_idx,
-                    trg_pad_idx=trg_pad_idx,
-                    trg_sos_idx=trg_sos_idx,
+model = Transformer(src_pad_idx=PAD_IDX,
+                    trg_pad_idx=PAD_IDX,
+                    trg_sos_idx=BOS_IDX,
                     d_model=d_model,
-                    enc_voc_size=enc_voc_size,
-                    dec_voc_size=dec_voc_size,
+                    enc_voc_size=SRC_VOCAB_SIZE,
+                    dec_voc_size=TGT_VOCAB_SIZE,
                     max_len=max_len,
                     ffn_hidden=ffn_hidden,
                     n_head=n_heads,
@@ -49,15 +57,17 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
                                                  factor=factor,
                                                  patience=patience)
 
-criterion = nn.CrossEntropyLoss(ignore_index=src_pad_idx)
+criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
 
 def train(model, iterator, optimizer, criterion, clip):
     model.train()
     epoch_loss = 0
-    for i, batch in enumerate(iterator):
-        src = batch.src
-        trg = batch.trg
+    pbar = tqdm(enumerate(iterator))
+    iters = 0
+    for i, (src, trg) in pbar:
+        src = src.transpose(0, 1).to(DEVICE)
+        trg = trg.transpose(0, 1).to(DEVICE)
 
         optimizer.zero_grad()
         output = model(src, trg[:, :-1])
@@ -70,19 +80,24 @@ def train(model, iterator, optimizer, criterion, clip):
         optimizer.step()
 
         epoch_loss += loss.item()
-        print('step :', round((i / len(iterator)) * 100, 2), '% , loss :', loss.item())
+        pbar.set_description(f'Epoch Loss : {epoch_loss / (i + 1):.3f}')
+        iters += 1
+        # print('step :', round((i / len(iterator)) * 100, 2), '% , loss :', loss.item())
 
-    return epoch_loss / len(iterator)
+    return epoch_loss / iters
 
 
 def evaluate(model, iterator, criterion):
     model.eval()
     epoch_loss = 0
     batch_bleu = []
+    iters = 0
     with torch.no_grad():
-        for i, batch in enumerate(iterator):
-            src = batch.src
-            trg = batch.trg
+        for src, trg in iterator:
+            src = src.transpose(0, 1).to(device)
+            trg = trg.transpose(0, 1).to(device)
+            trg_ori = trg.clone()
+
             output = model(src, trg[:, :-1])
             output_reshape = output.contiguous().view(-1, output.shape[-1])
             trg = trg[:, 1:].contiguous().view(-1)
@@ -93,9 +108,15 @@ def evaluate(model, iterator, criterion):
             total_bleu = []
             for j in range(batch_size):
                 try:
-                    trg_words = idx_to_word(batch.trg[j], loader.target.vocab)
+                    trg_words = idx_to_word(trg_ori[j], vocab_transform[TGT_LANGUAGE])
                     output_words = output[j].max(dim=1)[1]
-                    output_words = idx_to_word(output_words, loader.target.vocab)
+                    output_words = idx_to_word(output_words, vocab_transform[TGT_LANGUAGE])
+
+                    # print('-----------------------------------')
+                    # print(f'Ground Truth: {trg_words}')
+                    # print(f'Prediction: {output_words}')
+                    # print()
+
                     bleu = get_bleu(hypotheses=output_words.split(), reference=trg_words.split())
                     total_bleu.append(bleu)
                 except:
@@ -103,15 +124,18 @@ def evaluate(model, iterator, criterion):
 
             total_bleu = sum(total_bleu) / len(total_bleu)
             batch_bleu.append(total_bleu)
+            iters += 1
 
     batch_bleu = sum(batch_bleu) / len(batch_bleu)
-    return epoch_loss / len(iterator), batch_bleu
+    return epoch_loss / iters, batch_bleu
 
 
 def run(total_epoch, best_loss):
     train_losses, test_losses, bleus = [], [], []
     for step in range(total_epoch):
         start_time = time.time()
+        train_iter = build_dataloader('train', batch_size=batch_size)
+        valid_iter = build_dataloader('valid', batch_size=batch_size)
         train_loss = train(model, train_iter, optimizer, criterion, clip)
         valid_loss, bleu = evaluate(model, valid_iter, criterion)
         end_time = time.time()
