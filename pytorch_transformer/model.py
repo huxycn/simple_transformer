@@ -1,8 +1,12 @@
+import math
+
 from torch import Tensor
 import torch
 import torch.nn as nn
+
+# You acn use one of the following imports
 from torch.nn import Transformer
-import math
+# from .transformer import Transformer
 
 
 # helper Module that adds positional encoding to the token embedding to introduce a notion of word order.
@@ -58,19 +62,18 @@ class Seq2SeqTransformer(nn.Module):
         self.generator = nn.Linear(emb_size, tgt_vocab_size)
         self.src_tok_emb = TokenEmbedding(src_vocab_size, emb_size)
         self.tgt_tok_emb = TokenEmbedding(tgt_vocab_size, emb_size)
-        self.positional_encoding = PositionalEncoding(
-            emb_size, dropout=dropout)
+        self.positional_encoding = PositionalEncoding(emb_size, dropout=dropout)
 
     def forward(self,
                 src: Tensor,
-                trg: Tensor,
+                tgt: Tensor,
                 src_mask: Tensor,
                 tgt_mask: Tensor,
                 src_padding_mask: Tensor,
                 tgt_padding_mask: Tensor,
                 memory_key_padding_mask: Tensor):
         src_emb = self.positional_encoding(self.src_tok_emb(src))
-        tgt_emb = self.positional_encoding(self.tgt_tok_emb(trg))
+        tgt_emb = self.positional_encoding(self.tgt_tok_emb(tgt))
         outs = self.transformer(src_emb, tgt_emb, src_mask, tgt_mask, None,
                                 src_padding_mask, tgt_padding_mask, memory_key_padding_mask)
         return self.generator(outs)

@@ -3,12 +3,32 @@ import torch.nn as nn
 
 from timeit import default_timer as timer
 
-from data2 import SRC_VOCAB_SIZE, TGT_VOCAB_SIZE, PAD_IDX, EOS_IDX, build_dataloader, generate_square_subsequent_mask, create_mask
+from data import SRC_VOCAB_SIZE, TGT_VOCAB_SIZE, PAD_IDX, BOS_IDX, EOS_IDX, build_dataloader
+from data import text_transform, vocab_transform, SRC_LANGUAGE, TGT_LANGUAGE
 
-from model2 import Seq2SeqTransformer
+from pytorch_transformer.model import Seq2SeqTransformer
+
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+def generate_square_subsequent_mask(sz):
+    mask = (torch.triu(torch.ones((sz, sz))) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
+
+
+def create_mask(src, tgt):
+    src_seq_len = src.shape[0]
+    tgt_seq_len = tgt.shape[0]
+
+    tgt_mask = generate_square_subsequent_mask(tgt_seq_len)
+    src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
+
+    src_padding_mask = (src == PAD_IDX).transpose(0, 1)
+    tgt_padding_mask = (tgt == PAD_IDX).transpose(0, 1)
+    return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
 
 
 torch.manual_seed(0)
@@ -129,7 +149,7 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
 
 
 # ======== Testing the model ========
-from data2 import text_transform, vocab_transform, SRC_LANGUAGE, TGT_LANGUAGE, BOS_IDX
+
 
 # actual function to translate input sentence into target language
 def translate(model: torch.nn.Module, src_sentence: str):
