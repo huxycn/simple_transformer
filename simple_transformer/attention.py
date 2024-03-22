@@ -1,8 +1,10 @@
 """
-@author : Hyunwoong
-@when : 2019-10-22
-@homepage : https://github.com/gusdnd852
+This code is mainly copied from https://github.com/hyunwoongko/transformer/tree/master/models/layers
+    - scale_dot_product_attention.py
+    - multi_head_attention.py
+    - layer_norm.py
 """
+
 import math
 
 import torch

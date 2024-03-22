@@ -1,3 +1,9 @@
+"""
+This code interfaces refer to pytorch transformer source code
+but some details are aligned with the self-implemented attention in attention.py
+you can compare this code with pytorch_transformer/transformer.py to see the difference
+"""
+
 import copy
 from typing import Optional
 
@@ -9,7 +15,8 @@ from .attention import MultiheadAttention
 from torch.nn import ModuleList
 from torch.nn import Dropout
 from torch.nn import Linear
-from .attention import LayerNorm
+# from .attention import LayerNorm
+from torch.nn import LayerNorm
 
 
 class Transformer(Module):
@@ -37,6 +44,7 @@ class Transformer(Module):
 
 
 class TransformerEncoder(Module):
+
     def __init__(self, encoder_layer, num_layers):
         super(TransformerEncoder, self).__init__()
         self.layers = _get_clones(encoder_layer, num_layers)
@@ -131,13 +139,13 @@ class TransformerDecoderLayer(Module):
 
     # self-attention block
     def _sa_block(self, x, tgt_mask):
-        x = self.self_attn(q=x, k=x, v=x, mask=tgt_mask)
+        x = self.self_attn(x, x, x, mask=tgt_mask)
 
         return self.dropout1(x)
 
     # multihead attention block
-    def _mha_block(self, x, memory, memory_mask):
-        x = self.multihead_attn(x, memory, memory, mask=memory_mask)
+    def _mha_block(self, x, mem, mem_mask):
+        x = self.multihead_attn(x, mem, mem, mask=mem_mask)
         return self.dropout2(x)
 
     # feed forward block

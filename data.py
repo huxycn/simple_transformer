@@ -1,3 +1,8 @@
+"""
+This code is copied from https://pytorch.org/tutorials/beginner/translation_transformer.html
+`Data Sourcing and Processing` part and `Collation` part
+"""
+
 import torch
 
 from typing import Iterable, List
@@ -5,7 +10,6 @@ from typing import Iterable, List
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from torchtext.datasets import multi30k, Multi30k
-
 
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
@@ -25,6 +29,7 @@ vocab_transform = {}
 
 token_transform[SRC_LANGUAGE] = get_tokenizer('spacy', language='de_core_news_sm')
 token_transform[TGT_LANGUAGE] = get_tokenizer('spacy', language='en_core_web_sm')
+
 
 # helper function to yield list of tokens
 def yield_tokens(data_iter: Iterable, language: str) -> List[str]:
@@ -51,7 +56,6 @@ for ln in [SRC_LANGUAGE, TGT_LANGUAGE]:
 # If not set, it throws ``RuntimeError`` when the queried token is not found in the Vocabulary.
 for ln in [SRC_LANGUAGE, TGT_LANGUAGE]:
     vocab_transform[ln].set_default_index(UNK_IDX)
-
 
 
 # helper function to club together sequential operations

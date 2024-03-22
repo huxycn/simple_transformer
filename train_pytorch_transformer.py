@@ -1,3 +1,11 @@
+"""
+This code is copied from https://pytorch.org/tutorials/beginner/translation_transformer.html
+    - subsequent word mask & source and target padding masks
+    - hyperparameters, model, loss function, optimizer
+    - training and evaluation loop
+    - run training and prediction
+"""
+
 import torch
 import torch.nn as nn
 

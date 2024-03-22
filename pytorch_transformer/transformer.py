@@ -1,7 +1,7 @@
 """
-This is a simplified copy of the original transformer.py file from the PyTorch library (torch==1.12.1+cu113).
-The original file can be found at: https://github.com/pytorch/pytorch/blob/v1.12.1/torch/nn/modules/transformer.py
-You can diff the two files to see the changes that were made to the original source code.
+This code is a simplified copy of the original transformer code in PyTorch (torch==1.12.1+cu113)
+https://github.com/pytorch/pytorch/blob/v1.12.1/torch/nn/modules/transformer.py
+you can compare this code with the original code to see the difference
 """
 
 import copy

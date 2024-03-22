@@ -1,8 +1,7 @@
 """
-@author : Hyunwoong
-@when : 2019-10-22
-@homepage : https://github.com/gusdnd852
+This code is modified from https://github.com/hyunwoongko/transformer/blob/master/train.py
 """
+
 import math
 import time
 
@@ -191,29 +190,6 @@ def run(total_epoch, best_loss):
             if valid_loss < best_loss:
                 best_loss = valid_loss
                 torch.save(model.state_dict(), 'saved/model-{0}.pt'.format(valid_loss))
-
-        # train_losses.append(train_loss)
-        # test_losses.append(valid_loss)
-        # bleus.append(bleu)
-        # epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-
-        
-        # f = open('result/train_loss.txt', 'w')
-        # f.write(str(train_losses))
-        # f.close()
-
-        # f = open('result/bleu.txt', 'w')
-        # f.write(str(bleus))
-        # f.close()
-
-        # f = open('result/test_loss.txt', 'w')
-        # f.write(str(test_losses))
-        # f.close()
-
-        # print(f'Epoch: {step + 1} | Time: {epoch_mins}m {epoch_secs}s')
-        # print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-        # print(f'\tVal Loss: {valid_loss:.3f} |  Val PPL: {math.exp(valid_loss):7.3f}')
-        # print(f'\tBLEU Score: {bleu:.3f}')
 
 
 if __name__ == '__main__':

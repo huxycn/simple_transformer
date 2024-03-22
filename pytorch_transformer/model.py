@@ -1,3 +1,8 @@
+"""
+This code is copied from https://pytorch.org/tutorials/beginner/translation_transformer.html
+`Seq2Seq Network using Transformer` part
+"""
+
 import math
 
 from torch import Tensor

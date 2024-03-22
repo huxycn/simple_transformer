@@ -1,7 +1,5 @@
 """
-@author : Hyunwoong
-@when : 2019-12-22
-@homepage : https://github.com/gusdnd852
+This code is modified from https://github.com/hyunwoongko/transformer/blob/master/util/bleu.py
 """
 import math
 from collections import Counter

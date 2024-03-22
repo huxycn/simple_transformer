@@ -1,3 +1,8 @@
+"""
+This code is modified from https://pytorch.org/tutorials/beginner/translation_transformer.html
+you can compare this code with pytorch_transformer/model.py to see the difference
+"""
+
 import math
 
 from torch import Tensor
