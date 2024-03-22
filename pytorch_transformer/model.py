@@ -9,9 +9,9 @@ from torch import Tensor
 import torch
 import torch.nn as nn
 
-# You acn use one of the following imports
-from torch.nn import Transformer
-# from .transformer import Transformer
+# from torch.nn import Transformer
+# or
+from .transformer import Transformer
 
 
 # helper Module that adds positional encoding to the token embedding to introduce a notion of word order.
@@ -85,9 +85,10 @@ class Seq2SeqTransformer(nn.Module):
 
     def encode(self, src: Tensor, src_mask: Tensor):
         return self.transformer.encoder(self.positional_encoding(
-                            self.src_tok_emb(src)), src_mask)
+                            self.src_tok_emb(src)), src_mask, None)
 
     def decode(self, tgt: Tensor, memory: Tensor, tgt_mask: Tensor):
         return self.transformer.decoder(self.positional_encoding(
                           self.tgt_tok_emb(tgt)), memory,
-                          tgt_mask)
+                          tgt_mask, None, None, None)
+

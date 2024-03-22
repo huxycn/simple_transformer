@@ -10,15 +10,33 @@ import torch
 import torch.nn as nn
 
 from timeit import default_timer as timer
+from bleu import get_bleu
 
-from data import SRC_VOCAB_SIZE, TGT_VOCAB_SIZE, PAD_IDX, BOS_IDX, EOS_IDX, build_dataloader
-from data import text_transform, vocab_transform, SRC_LANGUAGE, TGT_LANGUAGE
+
+from data import (
+    PAD_IDX, BOS_IDX, EOS_IDX,
+    SRC_LANGUAGE, TGT_LANGUAGE,
+    SRC_VOCAB_SIZE, TGT_VOCAB_SIZE,
+    vocab_transform, text_transform,
+    build_dataloader
+)
 
 from pytorch_transformer.model import Seq2SeqTransformer
 
 
-
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+torch.manual_seed(0)
+
+NUM_ENCODER_LAYERS = 3
+NUM_DECODER_LAYERS = 3
+EMB_SIZE = 512
+NHEAD = 8
+FFN_HID_DIM = 512
+
+BATCH_SIZE = 128
+
+NUM_EPOCHS = 3
 
 
 def generate_square_subsequent_mask(sz):
@@ -39,20 +57,14 @@ def create_mask(src, tgt):
     return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
 
 
-torch.manual_seed(0)
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-
-EMB_SIZE = 512
-NHEAD = 8
-FFN_HID_DIM = 512
-BATCH_SIZE = 128
-NUM_ENCODER_LAYERS = 3
-NUM_DECODER_LAYERS = 3
-
-NUM_EPOCHS = 3
 
 transformer = Seq2SeqTransformer(NUM_ENCODER_LAYERS, NUM_DECODER_LAYERS, EMB_SIZE,
                                  NHEAD, SRC_VOCAB_SIZE, TGT_VOCAB_SIZE, FFN_HID_DIM)
+
+print(f'The model has {count_parameters(transformer):,} trainable parameters')
 
 for p in transformer.parameters():
     if p.dim() > 1:
@@ -60,7 +72,8 @@ for p in transformer.parameters():
 
 transformer = transformer.to(DEVICE)
 
-loss_fn = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
+
+criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
 optimizer = torch.optim.Adam(transformer.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
 
@@ -88,7 +101,7 @@ def train_epoch(model, optimizer):
         optimizer.zero_grad()
 
         tgt_out = tgt[1:, :]
-        loss = loss_fn(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
+        loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
         loss.backward()
 
         optimizer.step()
@@ -118,18 +131,19 @@ def evaluate(model):
         logits = model(src, tgt_input, src_mask, tgt_mask,src_padding_mask, tgt_padding_mask, src_padding_mask)
 
         tgt_out = tgt[1:, :]
-        loss = loss_fn(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
+        loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
         losses += loss.item()
 
     return losses / len(list(val_dataloader))
 
 
-for epoch in range(1, NUM_EPOCHS+1):
-    start_time = timer()
-    train_loss = train_epoch(transformer, optimizer)
-    end_time = timer()
-    val_loss = evaluate(transformer)
-    print((f"Epoch: {epoch}, Train loss: {train_loss:.3f}, Val loss: {val_loss:.3f}, "f"Epoch time = {(end_time - start_time):.3f}s"))
+def run():
+    for epoch in range(1, NUM_EPOCHS+1):
+        start_time = timer()
+        train_loss = train_epoch(transformer, optimizer)
+        end_time = timer()
+        val_loss = evaluate(transformer)
+        print((f"Epoch: {epoch}, Train loss: {train_loss:.3f}, Val loss: {val_loss:.3f}, "f"Epoch time = {(end_time - start_time):.3f}s"))
 
 
 # function to generate output sequence using greedy algorithm
@@ -156,9 +170,6 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
     return ys
 
 
-# ======== Testing the model ========
-
-
 # actual function to translate input sentence into target language
 def translate(model: torch.nn.Module, src_sentence: str):
     model.eval()
@@ -170,5 +181,14 @@ def translate(model: torch.nn.Module, src_sentence: str):
     return " ".join(vocab_transform[TGT_LANGUAGE].lookup_tokens(list(tgt_tokens.cpu().numpy()))).replace("<bos>", "").replace("<eos>", "")
 
 
-# print(translate(transformer, "Eine Gruppe von Menschen steht vor einem Iglu ."))
-print(translate(transformer, "A group of people stand in front of an igloo ."))
+if __name__ == '__main__':
+    run()
+    src_words = "A group of people stand in front of an igloo ."
+    tgt_words = "Eine Gruppe von Menschen steht vor einem Iglu ."
+    output_words = translate(transformer, src_words)
+    bleu = get_bleu(hypotheses=output_words.split(), reference=tgt_words.split())
+
+    print(f'src_words: {src_words}')
+    print(f'tgt_words: {tgt_words}')
+    print(f'output_words: {output_words}')
+    print(f'BLEU: {bleu}')

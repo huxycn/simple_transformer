@@ -5,7 +5,6 @@ you can compare this code with pytorch_transformer/transformer.py to see the dif
 """
 
 import copy
-from typing import Optional
 
 import torch
 from torch import Tensor
@@ -22,17 +21,16 @@ from torch.nn import LayerNorm
 class Transformer(Module):
 
     def __init__(self, d_model: int = 512, nhead: int = 8, num_encoder_layers: int = 6,
-                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 ):
+                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1):
         super(Transformer, self).__init__()
 
         encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
-
-        self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers)
+        encoder_norm = LayerNorm(d_model)
+        self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
         decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
-
-        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers)
+        decoder_norm = LayerNorm(d_model)
+        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
 
         self.d_model = d_model
         self.nhead = nhead
@@ -45,31 +43,40 @@ class Transformer(Module):
 
 class TransformerEncoder(Module):
 
-    def __init__(self, encoder_layer, num_layers):
+    def __init__(self, encoder_layer, num_layers, norm=None):
         super(TransformerEncoder, self).__init__()
         self.layers = _get_clones(encoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
 
     def forward(self, src, src_mask):
-
         output = src
 
         for mod in self.layers:
             output = mod(output, src_mask=src_mask)
 
+        if self.norm is not None:
+            output = self.norm(output)
+
         return output
 
 
 class TransformerDecoder(Module):
-    def __init__(self, decoder_layer, num_layers):
+
+    def __init__(self, decoder_layer, num_layers, norm=None):
         super(TransformerDecoder, self).__init__()
         self.layers = _get_clones(decoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
 
     def forward(self, tgt, memory, tgt_mask, memory_mask):
-
         output = tgt
 
         for mod in self.layers:
             output = mod(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
+
+        if self.norm is not None:
+            output = self.norm(output)
 
         return output
 
@@ -81,7 +88,6 @@ class TransformerEncoderLayer(Module):
         self.self_attn = MultiheadAttention(d_model, nhead)
 
         self.linear1 = Linear(d_model, dim_feedforward)
-        
         self.activation = F.relu
         self.dropout = Dropout(dropout)
         self.linear2 = Linear(dim_feedforward, d_model)
@@ -93,7 +99,6 @@ class TransformerEncoderLayer(Module):
 
     def forward(self, src, src_mask):
         x = src
-
         x = self.norm1(x + self._sa_block(x, src_mask))
         x = self.norm2(x + self._ff_block(x))
 
@@ -116,6 +121,7 @@ class TransformerDecoderLayer(Module):
         super(TransformerDecoderLayer, self).__init__()
         self.self_attn = MultiheadAttention(d_model, nhead)
         self.multihead_attn = MultiheadAttention(d_model, nhead)
+
         self.linear1 = Linear(d_model, dim_feedforward)
         self.activation = F.relu
         self.dropout = Dropout(dropout)
@@ -130,7 +136,6 @@ class TransformerDecoderLayer(Module):
 
     def forward(self, tgt, memory, tgt_mask, memory_mask):
         x = tgt
-
         x = self.norm1(x + self._sa_block(x, tgt_mask))
         x = self.norm2(x + self._mha_block(x, memory, memory_mask))
         x = self.norm3(x + self._ff_block(x))

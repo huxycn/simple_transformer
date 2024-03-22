@@ -39,7 +39,7 @@ class TokenEmbedding(nn.Module):
         self.emb_size = emb_size
 
     def forward(self, tokens: Tensor):
-        return self.embedding(tokens.long())
+        return self.embedding(tokens.long()) * math.sqrt(self.emb_size)
 
 
 # Seq2Seq Network
@@ -74,4 +74,13 @@ class Seq2SeqTransformer(nn.Module):
         tgt_emb = self.positional_encoding(self.tgt_tok_emb(tgt))
         outs = self.transformer(src_emb, tgt_emb, src_mask, tgt_mask)
         return self.generator(outs)
+
+    def encode(self, src, src_mask):
+        return self.transformer.encoder(self.positional_encoding(
+                            self.src_tok_emb(src)), src_mask)
+
+    def decode(self, tgt, memory, tgt_mask):
+        return self.transformer.decoder(self.positional_encoding(
+                          self.tgt_tok_emb(tgt)), memory,
+                          tgt_mask, None)
 

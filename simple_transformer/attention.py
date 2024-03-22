@@ -20,9 +20,10 @@ class ScaleDotProductAttention(nn.Module):
     Value : every sentence same with Key (encoder)
     """
 
-    def __init__(self):
+    def __init__(self, dropout=0.1):
         super(ScaleDotProductAttention, self).__init__()
         self.softmax = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, q, k, v, mask=None, e=1e-12):
         # input is 4 dimension tensor
@@ -39,6 +40,7 @@ class ScaleDotProductAttention(nn.Module):
 
         # 3. pass them softmax to make [0, 1] range
         score = self.softmax(score)
+        score = self.dropout(score)
 
         # 4. multiply with Value
         v = score @ v
@@ -48,10 +50,10 @@ class ScaleDotProductAttention(nn.Module):
 
 class MultiheadAttention(nn.Module):
 
-    def __init__(self, d_model, n_head):
+    def __init__(self, d_model, n_head, dropout=0.1):
         super(MultiheadAttention, self).__init__()
         self.n_head = n_head
-        self.attention = ScaleDotProductAttention()
+        self.attention = ScaleDotProductAttention(dropout=dropout)
         self.w_q = nn.Linear(d_model, d_model)
         self.w_k = nn.Linear(d_model, d_model)
         self.w_v = nn.Linear(d_model, d_model)
