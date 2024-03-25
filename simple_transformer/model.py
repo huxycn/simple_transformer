@@ -27,7 +27,7 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.register_buffer('pos_embedding', pos_embedding)
 
-    def forward(self, token_embedding: Tensor):
+    def forward(self, token_embedding):
         return self.dropout(token_embedding + self.pos_embedding[:token_embedding.size(1), :])
 
 
@@ -38,7 +38,7 @@ class TokenEmbedding(nn.Module):
         self.embedding = nn.Embedding(vocab_size, emb_size)
         self.emb_size = emb_size
 
-    def forward(self, tokens: Tensor):
+    def forward(self, tokens):
         return self.embedding(tokens.long()) * math.sqrt(self.emb_size)
 
 
@@ -66,10 +66,10 @@ class Seq2SeqTransformer(nn.Module):
         self.positional_encoding = PositionalEncoding(emb_size, dropout=dropout)
 
     def forward(self,
-                src: Tensor,
-                tgt: Tensor,
-                src_mask: Tensor,
-                tgt_mask: Tensor):
+                src,
+                tgt,
+                src_mask,
+                tgt_mask):
         src_emb = self.positional_encoding(self.src_tok_emb(src))
         tgt_emb = self.positional_encoding(self.tgt_tok_emb(tgt))
         outs = self.transformer(src_emb, tgt_emb, src_mask, tgt_mask)

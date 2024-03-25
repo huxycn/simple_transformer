@@ -35,13 +35,11 @@ class Transformer(Module):
         self.nhead = nhead
 
     def forward(self, src, tgt, src_mask, tgt_mask,
-                memory_mask, src_key_padding_mask,
-                tgt_key_padding_mask, memory_key_padding_mask):
+                memory_mask, src_key_padding_mask, tgt_key_padding_mask, memory_key_padding_mask):
         memory = self.encoder(src, src_mask,
                               src_key_padding_mask)
-        output = self.decoder(tgt, memory, tgt_mask,
-                              memory_mask, tgt_key_padding_mask,
-                              memory_key_padding_mask)
+        output = self.decoder(tgt, memory, tgt_mask, memory_mask,
+                              tgt_key_padding_mask, memory_key_padding_mask)
         return output
 
 
@@ -106,16 +104,21 @@ class TransformerEncoderLayer(Module):
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
 
-    def forward(self, src, src_mask, src_key_padding_mask):
+    def forward(self, src, src_mask,
+                src_key_padding_mask):
         x = src
-        x = self.norm1(x + self._sa_block(x, src_mask, src_key_padding_mask))
+        x = self.norm1(x + self._sa_block(x, src_mask,
+                                          src_key_padding_mask))
         x = self.norm2(x + self._ff_block(x))
 
         return x
 
     # self-attention block
-    def _sa_block(self, x, attn_mask, key_padding_mask):
-        x = self.self_attn(x, x, x, attn_mask=attn_mask, key_padding_mask=key_padding_mask, need_weights=False)[0]
+    def _sa_block(self, x, attn_mask,
+                  key_padding_mask):
+        x = self.self_attn(x, x, x, attn_mask=attn_mask,
+                           key_padding_mask=key_padding_mask,
+                           need_weights=False)[0]
         return self.dropout1(x)
 
     # feed forward block
@@ -143,25 +146,28 @@ class TransformerDecoderLayer(Module):
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
 
-    def forward(self, tgt, memory, tgt_mask, memory_mask, tgt_key_padding_mask, memory_key_padding_mask):
+    def forward(self, tgt, memory, tgt_mask, memory_mask,
+                tgt_key_padding_mask, memory_key_padding_mask):
         x = tgt
-        x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask))
-        x = self.norm2(x + self._mha_block(x, memory, memory_mask, memory_key_padding_mask))
+        x = self.norm1(x + self._sa_block(x, tgt_mask,
+                                          tgt_key_padding_mask))
+        x = self.norm2(x + self._mha_block(x, memory, memory_mask,
+                                           memory_key_padding_mask))
         x = self.norm3(x + self._ff_block(x))
 
         return x
 
     # self-attention block
-    def _sa_block(self, x, attn_mask, key_padding_mask):
-        x = self.self_attn(x, x, x,
-                           attn_mask=attn_mask,
+    def _sa_block(self, x, attn_mask,
+                  key_padding_mask):
+        x = self.self_attn(x, x, x, attn_mask=attn_mask,
                            key_padding_mask=key_padding_mask,
                            need_weights=False)[0]
         return self.dropout1(x)
 
     # multihead attention block
-    def _mha_block(self, x, mem,
-                   attn_mask, key_padding_mask):
+    def _mha_block(self, x, mem, attn_mask,
+                   key_padding_mask):
         x = self.multihead_attn(x, mem, mem,
                                 attn_mask=attn_mask,
                                 key_padding_mask=key_padding_mask,

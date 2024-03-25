@@ -35,17 +35,38 @@ BATCH_SIZE = 128
 NUM_EPOCHS = 3
 
 
+def _gen_pad_mask_base(x):
+    """ Example (F position is masked):
+    >>> PAD_IDX = 1
+    >>> _gen_pad_mask_base(torch.tensor([[2, 4, 5, 3], [2, 4, 3, 1]]))
+    tensor([[T, T, T, T],
+            [T, T, T, F]])
+    """
+    return (x != PAD_IDX)
+
+
+def _gen_sub_mask_base(sz):
+    """ Example (F position is masked):
+    >>> _gen_sub_mask_base(3)
+    tensor([[T, F, F],
+            [T, T, F],
+            [T, T, T]])
+    """
+    return torch.tril(torch.ones(sz, sz)).type(torch.bool)
+
+
 def make_src_mask(src):
-    src_mask = (src != PAD_IDX).unsqueeze(1).unsqueeze(2)
+    src_mask = _gen_pad_mask_base(src).unsqueeze(1).unsqueeze(2)
+
     return src_mask
 
 
 def make_tgt_mask(tgt):
-    tgt_pad_mask = (tgt != PAD_IDX).unsqueeze(1).unsqueeze(3)
-    tgt_len = tgt.shape[1]
-    # torch.triu(torch.full((sz, sz), float('-inf')), diagonal=1)
-    tgt_sub_mask = torch.tril(torch.ones(tgt_len, tgt_len)).type(torch.ByteTensor).to(tgt_pad_mask.device)
-    tgt_mask = tgt_pad_mask & tgt_sub_mask.type(torch.bool)
+    tgt_pad_mask = _gen_pad_mask_base(tgt).unsqueeze(1).unsqueeze(3)
+
+    tgt_sub_mask = _gen_sub_mask_base(tgt.shape[1]).to(tgt_pad_mask.device)
+
+    tgt_mask = tgt_pad_mask & tgt_sub_mask
     return tgt_mask
 
 
@@ -91,10 +112,7 @@ def train_epoch(model, optimizer):
 
         optimizer.zero_grad()
 
-        # output_reshape = logits.contiguous().view(-1, logits.shape[-1])
-        # tgt = tgt[:, 1:].contiguous().view(-1)
         tgt_out = tgt[:, 1:]
-
         loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
         loss.backward()
 

@@ -39,9 +39,29 @@ BATCH_SIZE = 128
 NUM_EPOCHS = 3
 
 
+def _gen_pad_mask_base(x):
+    """ Example (F position is masked):
+    >>> PAD_IDX = 1
+    >>> _gen_pad_mask_base(torch.tensor([[2, 4, 5, 3], [2, 4, 3, 1]]))
+    tensor([[T, T, T, T],
+            [T, T, T, F]])
+    """
+    return (x != PAD_IDX)
+
+
+def _gen_sub_mask_base(sz):
+    """ Example (F position is masked):
+    >>> _gen_sub_mask_base(3)
+    tensor([[T, F, F],
+            [T, T, F],
+            [T, T, T]])
+    """
+    return torch.tril(torch.ones(sz, sz)).type(torch.bool)
+
+
 def generate_square_subsequent_mask(sz):
-    mask = (torch.triu(torch.ones((sz, sz))) == 1).transpose(0, 1)
-    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    mask = _gen_sub_mask_base(sz)
+    mask = mask.float().masked_fill(~mask, float('-inf')).masked_fill(mask, float(0.0))
     return mask
 
 
@@ -52,8 +72,8 @@ def create_mask(src, tgt):
     tgt_mask = generate_square_subsequent_mask(tgt_seq_len)
     src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
 
-    src_padding_mask = (src == PAD_IDX).transpose(0, 1)
-    tgt_padding_mask = (tgt == PAD_IDX).transpose(0, 1)
+    src_padding_mask = ~_gen_pad_mask_base(src).transpose(0, 1)
+    tgt_padding_mask = ~_gen_pad_mask_base(tgt).transpose(0, 1)
     return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
 
 
@@ -96,7 +116,7 @@ def train_epoch(model, optimizer):
         src_padding_mask = src_padding_mask.to(DEVICE)
         tgt_padding_mask = tgt_padding_mask.to(DEVICE)
 
-        logits = model(src, tgt_input, src_mask, tgt_mask,src_padding_mask, tgt_padding_mask, src_padding_mask)
+        logits = model(src, tgt_input, src_mask, tgt_mask, src_padding_mask, tgt_padding_mask, src_padding_mask)
 
         optimizer.zero_grad()
 
@@ -110,6 +130,7 @@ def train_epoch(model, optimizer):
     return losses / len(list(train_dataloader))
 
 
+@torch.no_grad()
 def evaluate(model):
     model.eval()
     losses = 0

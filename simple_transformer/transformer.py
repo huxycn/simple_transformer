@@ -15,6 +15,7 @@ from torch.nn import ModuleList
 from torch.nn import Dropout
 from torch.nn import Linear
 # from .attention import LayerNorm
+# or
 from torch.nn import LayerNorm
 
 
