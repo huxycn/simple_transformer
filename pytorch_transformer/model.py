@@ -74,21 +74,22 @@ class Seq2SeqTransformer(nn.Module):
                 tgt,
                 src_mask,
                 tgt_mask,
+                mem_mask,
                 src_padding_mask,
                 tgt_padding_mask,
                 memory_key_padding_mask):
         src_emb = self.positional_encoding(self.src_tok_emb(src))
         tgt_emb = self.positional_encoding(self.tgt_tok_emb(tgt))
         outs = self.transformer(src_emb, tgt_emb, src_mask, tgt_mask,
-                                None, src_padding_mask, tgt_padding_mask, memory_key_padding_mask)
+                                mem_mask, src_padding_mask, tgt_padding_mask, memory_key_padding_mask)
         return self.generator(outs)
 
-    def encode(self, src, src_mask):
+    def encode(self, src, src_mask, src_padding_mask):
         return self.transformer.encoder(self.positional_encoding(
-                            self.src_tok_emb(src)), src_mask, None)
+                            self.src_tok_emb(src)), src_mask, src_padding_mask)
 
-    def decode(self, tgt, memory, tgt_mask):
+    def decode(self, tgt, memory, tgt_mask, mem_mask, mem_padding_mask, tgt_padding_mask):
         return self.transformer.decoder(self.positional_encoding(
                           self.tgt_tok_emb(tgt)), memory,
-                          tgt_mask, None, None, None)
+                          tgt_mask, mem_mask, mem_padding_mask, tgt_padding_mask)
 

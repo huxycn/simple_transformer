@@ -61,8 +61,9 @@ def _gen_sub_mask_base(sz):
 
 def generate_square_subsequent_mask(sz):
     mask = _gen_sub_mask_base(sz)
-    mask = mask.float().masked_fill(~mask, float('-inf')).masked_fill(mask, float(0.0))
-    return mask
+    return ~mask
+    # mask = mask.float().masked_fill(~mask, float('-inf')).masked_fill(mask, float(0.0))
+    # return mask
 
 
 def create_mask(src, tgt):
@@ -72,9 +73,11 @@ def create_mask(src, tgt):
     tgt_mask = generate_square_subsequent_mask(tgt_seq_len)
     src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
 
+    mem_mask = torch.zeros((tgt_seq_len, src_seq_len)).type(torch.bool)
+
     src_padding_mask = ~_gen_pad_mask_base(src).transpose(0, 1)
     tgt_padding_mask = ~_gen_pad_mask_base(tgt).transpose(0, 1)
-    return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
+    return src_mask, tgt_mask, mem_mask, src_padding_mask, tgt_padding_mask, src_padding_mask
 
 
 def count_parameters(model):
@@ -86,9 +89,13 @@ transformer = Seq2SeqTransformer(NUM_ENCODER_LAYERS, NUM_DECODER_LAYERS, EMB_SIZ
 
 print(f'The model has {count_parameters(transformer):,} trainable parameters')
 
-for p in transformer.parameters():
+for name, p in transformer.named_parameters():
     if p.dim() > 1:
+        # print(f'Initializing {name} ({p.shape}) as nn.init.xavier_uniform_')
         nn.init.xavier_uniform_(p)
+    elif 'proj' in name:
+        print(f'Initializing {name} ({p.shape}) as nn.init.zeros_')
+        nn.init.constant_(p, 0.)
 
 transformer = transformer.to(DEVICE)
 
@@ -110,13 +117,15 @@ def train_epoch(model, optimizer):
 
         tgt_input = tgt[:-1, :]
 
-        src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt_input)
+        src_mask, tgt_mask, mem_mask, src_padding_mask, tgt_padding_mask, mem_padding_mask = create_mask(src, tgt_input)
         src_mask = src_mask.to(DEVICE)
         tgt_mask = tgt_mask.to(DEVICE)
+        mem_mask = mem_mask.to(DEVICE)
         src_padding_mask = src_padding_mask.to(DEVICE)
         tgt_padding_mask = tgt_padding_mask.to(DEVICE)
+        mem_padding_mask = mem_padding_mask.to(DEVICE)
 
-        logits = model(src, tgt_input, src_mask, tgt_mask, src_padding_mask, tgt_padding_mask, src_padding_mask)
+        logits = model(src, tgt_input, src_mask, tgt_mask, mem_mask, src_padding_mask, tgt_padding_mask, mem_padding_mask)
 
         optimizer.zero_grad()
 
@@ -143,13 +152,15 @@ def evaluate(model):
 
         tgt_input = tgt[:-1, :]
 
-        src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt_input)
+        src_mask, tgt_mask, mem_mask, src_padding_mask, tgt_padding_mask, mem_padding_mask = create_mask(src, tgt_input)
         src_mask = src_mask.to(DEVICE)
         tgt_mask = tgt_mask.to(DEVICE)
+        mem_mask = mem_mask.to(DEVICE)
         src_padding_mask = src_padding_mask.to(DEVICE)
         tgt_padding_mask = tgt_padding_mask.to(DEVICE)
+        mem_padding_mask = mem_padding_mask.to(DEVICE)
 
-        logits = model(src, tgt_input, src_mask, tgt_mask,src_padding_mask, tgt_padding_mask, src_padding_mask)
+        logits = model(src, tgt_input, src_mask, tgt_mask, mem_mask, src_padding_mask, tgt_padding_mask, mem_padding_mask)
 
         tgt_out = tgt[1:, :]
         loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
@@ -171,14 +182,19 @@ def run():
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
     src = src.to(DEVICE)
     src_mask = src_mask.to(DEVICE)
+    src_padding_mask = (src == PAD_IDX).transpose(0, 1).to(DEVICE)
 
-    memory = model.encode(src, src_mask)
+    memory = model.encode(src, src_mask, src_padding_mask)
     ys = torch.ones(1, 1).fill_(start_symbol).type(torch.long).to(DEVICE)
     for i in range(max_len-1):
         memory = memory.to(DEVICE)
         tgt_mask = (generate_square_subsequent_mask(ys.size(0))
                     .type(torch.bool)).to(DEVICE)
-        out = model.decode(ys, memory, tgt_mask)
+        mem_mask = (torch.zeros(ys.size(0), memory.size(0))
+                    .type(torch.bool)).to(DEVICE)
+        tgt_key_padding_mask = (ys == PAD_IDX).transpose(0, 1).to(DEVICE)
+        mem_key_padding_mask = src_padding_mask.to(DEVICE)
+        out = model.decode(ys, memory, tgt_mask, mem_mask, tgt_key_padding_mask, mem_key_padding_mask)
         out = out.transpose(0, 1)
         prob = model.generator(out[:, -1])
         _, next_word = torch.max(prob, dim=1)

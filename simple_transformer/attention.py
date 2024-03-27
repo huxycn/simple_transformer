@@ -9,43 +9,31 @@ import math
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 
-class ScaleDotProductAttention(nn.Module):
-    """
-    compute scale dot product attention
+def _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, e=1e-12):
+    # input is 4 dimension tensor
+    # [batch_size, head, length, d_tensor]
+    batch_size, head, length, d_tensor = k.size()
 
-    Query : given sentence that we focused on (decoder)
-    Key : every sentence to check relationship with Qeury(encoder)
-    Value : every sentence same with Key (encoder)
-    """
+    # 1. dot product Query with Key^T to compute similarity
+    k_t = k.transpose(2, 3)  # transpose
+    attn = (q @ k_t) / math.sqrt(d_tensor)  # scaled dot product
 
-    def __init__(self, dropout=0.1):
-        super(ScaleDotProductAttention, self).__init__()
-        self.softmax = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(dropout)
+    # 2. apply masking (opt)
+    if attn_mask is not None:
+        attn = attn.masked_fill(attn_mask == 0, -10000)
 
-    def forward(self, q, k, v, mask=None, e=1e-12):
-        # input is 4 dimension tensor
-        # [batch_size, head, length, d_tensor]
-        batch_size, head, length, d_tensor = k.size()
+    # 3. pass them softmax to make [0, 1] range
+    attn = F.softmax(attn, dim=-1)
+    if dropout_p > 0.0:
+        attn = F.dropout(attn, p=dropout_p)
 
-        # 1. dot product Query with Key^T to compute similarity
-        k_t = k.transpose(2, 3)  # transpose
-        score = (q @ k_t) / math.sqrt(d_tensor)  # scaled dot product
+    # 4. multiply with Value
+    output = attn @ v
 
-        # 2. apply masking (opt)
-        if mask is not None:
-            score = score.masked_fill(mask == 0, -10000)
-
-        # 3. pass them softmax to make [0, 1] range
-        score = self.softmax(score)
-        score = self.dropout(score)
-
-        # 4. multiply with Value
-        v = score @ v
-
-        return v, score
+    return output, attn
 
 
 class MultiheadAttention(nn.Module):
@@ -53,7 +41,8 @@ class MultiheadAttention(nn.Module):
     def __init__(self, d_model, n_head, dropout=0.1):
         super(MultiheadAttention, self).__init__()
         self.n_head = n_head
-        self.attention = ScaleDotProductAttention(dropout=dropout)
+        # self.attention = ScaleDotProductAttention(dropout=dropout)
+        self.dropout = dropout
         self.w_q = nn.Linear(d_model, d_model)
         self.w_k = nn.Linear(d_model, d_model)
         self.w_v = nn.Linear(d_model, d_model)
@@ -67,7 +56,7 @@ class MultiheadAttention(nn.Module):
         q, k, v = self.split(q), self.split(k), self.split(v)
 
         # 3. do scale dot product to compute similarity
-        out, attention = self.attention(q, k, v, mask=mask)
+        out, attention = _scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=self.dropout)
 
         # 4. concat and pass to linear layer
         out = self.concat(out)

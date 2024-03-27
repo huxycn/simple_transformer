@@ -79,9 +79,12 @@ transformer = Seq2SeqTransformer(NUM_ENCODER_LAYERS, NUM_DECODER_LAYERS, EMB_SIZ
 
 print(f'The model has {count_parameters(transformer):,} trainable parameters')
 
-for p in transformer.parameters():
+for name, p in transformer.named_parameters():
     if p.dim() > 1:
         nn.init.xavier_uniform_(p)
+    elif name.split('.')[-2] in ['w_q', 'w_k', 'w_v', 'w_concat']:
+        print(f'Init {name} {p.shape} with 0')
+        nn.init.constant_(p, 0.)
 
 transformer = transformer.to(DEVICE)
 
