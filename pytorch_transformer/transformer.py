@@ -118,7 +118,7 @@ class TransformerEncoderLayer(Module):
                   key_padding_mask):
         x = self.self_attn(x, x, x, attn_mask=attn_mask,
                            key_padding_mask=key_padding_mask,
-                           need_weights=False)[0]
+                           )[0]
         return self.dropout1(x)
 
     # feed forward block
@@ -162,7 +162,7 @@ class TransformerDecoderLayer(Module):
                   key_padding_mask):
         x = self.self_attn(x, x, x, attn_mask=attn_mask,
                            key_padding_mask=key_padding_mask,
-                           need_weights=False)[0]
+                           )[0]
         return self.dropout1(x)
 
     # multihead attention block
@@ -171,7 +171,7 @@ class TransformerDecoderLayer(Module):
         x = self.multihead_attn(x, mem, mem,
                                 attn_mask=attn_mask,
                                 key_padding_mask=key_padding_mask,
-                                need_weights=False)[0]
+                                )[0]
         return self.dropout2(x)
 
     # feed forward block
