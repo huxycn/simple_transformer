@@ -83,7 +83,7 @@ for name, p in transformer.named_parameters():
     if p.dim() > 1:
         nn.init.xavier_uniform_(p)
     elif name.split('.')[-2] in ['w_q', 'w_k', 'w_v', 'w_concat']:
-        print(f'Init {name} {p.shape} with 0')
+        # print(f'Init {name} {p.shape} with 0')
         nn.init.constant_(p, 0.)
 
 transformer = transformer.to(DEVICE)
@@ -171,13 +171,12 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
         memory = memory.to(DEVICE)
         tgt_mask = make_tgt_mask(ys)
         out = model.decode(ys, memory, tgt_mask)
-        out = out.transpose(0, 1)
+        # out = out.transpose(0, 1)
         prob = model.generator(out[:, -1])
         _, next_word = torch.max(prob, dim=1)
         next_word = next_word.item()
 
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=0)
+        ys = torch.cat([ys, torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
         if next_word == EOS_IDX:
             break
     return ys
