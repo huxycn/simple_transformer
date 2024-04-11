@@ -8,8 +8,32 @@ This code is mainly copied from https://github.com/hyunwoongko/transformer/tree/
 import math
 
 import torch
-import torch.nn as nn
+from torch import Tensor
+from torch.nn import Linear
+from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
+from torch.nn.parameter import Parameter
+from torch.nn  import Module
 from torch.nn import functional as F
+
+
+# def _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p):
+
+#     B, Nt, E = q.shape
+
+#     # (B, Nt, E) x (B, E, Ns) -> (B, Nt, Ns)
+#     attn = torch.bmm(q, k.transpose(-2, -1)) / math.sqrt(E)
+
+#     if attn_mask is not None:
+#         attn = attn.masked_fill(attn_mask.squeeze(1), -1e9)
+
+#     attn = F.softmax(attn, dim=-1)
+#     if dropout_p > 0.0:
+#         attn = F.dropout(attn, p=dropout_p)
+
+#     # (B, Nt, Ns) x (B, Ns, E) -> (B, Nt, E)
+#     output = torch.bmm(attn, v)
+
+#     return output, attn
 
 
 def _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, e=1e-12):
@@ -23,7 +47,7 @@ def _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, e=1e-12):
 
     # 2. apply masking (opt)
     if attn_mask is not None:
-        attn = attn.masked_fill(attn_mask == 0, -10000)
+        attn = attn.masked_fill(attn_mask != 0, -10000)
 
     # 3. pass them softmax to make [0, 1] range
     attn = F.softmax(attn, dim=-1)
@@ -36,78 +60,49 @@ def _scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, e=1e-12):
     return output, attn
 
 
-class MultiheadAttention(nn.Module):
+class MultiheadAttention(Module):
 
-    def __init__(self, d_model, n_head, dropout=0.1):
+    def __init__(self, embed_dim, num_heads, dropout=0.1, bias=True):
+
         super(MultiheadAttention, self).__init__()
-        self.n_head = n_head
-        # self.attention = ScaleDotProductAttention(dropout=dropout)
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
         self.dropout = dropout
-        self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
-        self.w_concat = nn.Linear(d_model, d_model)
+        self.head_dim = embed_dim // num_heads
 
-    def forward(self, q, k, v, mask=None):
-        # 1. dot product with weight matrices
-        q, k, v = self.w_q(q), self.w_k(k), self.w_v(v)
+        self.q_proj = Linear(embed_dim, embed_dim, bias=bias)
+        self.k_proj = Linear(embed_dim, embed_dim, bias=bias)
+        self.v_proj = Linear(embed_dim, embed_dim, bias=bias)
+        self.out_proj = Linear(embed_dim, embed_dim, bias=bias)
 
-        # 2. split tensor by number of heads
-        q, k, v = self.split(q), self.split(k), self.split(v)
+    def forward(self, q, k, v, attn_mask):
 
-        # 3. do scale dot product to compute similarity
-        out, attention = _scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=self.dropout)
+        bsz, tgt_len, embed_dim = q.shape
+        _, src_len, _ = k.shape
+        head_dim = embed_dim // self.num_heads
+
+        q = self.q_proj(q)
+        k = self.k_proj(k)
+        v = self.v_proj(v)
+
+        q = q.view(bsz, tgt_len, self.num_heads, head_dim).transpose(1, 2)
+        k = k.view(bsz, src_len, self.num_heads, head_dim).transpose(1, 2)
+        v = v.view(bsz, src_len, self.num_heads, head_dim).transpose(1, 2)
+
+        # (bsz, nhead, seq_len, head_dim)
+
+        # q = q.contiguous().view(bsz * self.num_heads, tgt_len, head_dim)
+        # k = k.contiguous().view(bsz * self.num_heads, src_len, head_dim)
+        # v = v.contiguous().view(bsz * self.num_heads, src_len, head_dim)
+
+        out, attention = _scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout)
+
+        out = out.view(bsz, self.num_heads, tgt_len, head_dim)
 
         # 4. concat and pass to linear layer
-        out = self.concat(out)
-        out = self.w_concat(out)
+        out = out.transpose(1, 2).contiguous().view(bsz, out.size(2), embed_dim)
 
-        # 5. visualize attention map
-        # TODO : we should implement visualization
+        # out = self.concat(out)
+        out = self.out_proj(out)
 
-        return out
-
-    def split(self, tensor):
-        """
-        split tensor by number of head
-
-        :param tensor: [batch_size, length, d_model]
-        :return: [batch_size, head, length, d_tensor]
-        """
-        batch_size, length, d_model = tensor.size()
-
-        d_tensor = d_model // self.n_head
-        tensor = tensor.view(batch_size, length, self.n_head, d_tensor).transpose(1, 2)
-        # it is similar with group convolution (split by number of heads)
-
-        return tensor
-
-    def concat(self, tensor):
-        """
-        inverse function of self.split(tensor : torch.Tensor)
-
-        :param tensor: [batch_size, head, length, d_tensor]
-        :return: [batch_size, length, d_model]
-        """
-        batch_size, head, length, d_tensor = tensor.size()
-        d_model = head * d_tensor
-
-        tensor = tensor.transpose(1, 2).contiguous().view(batch_size, length, d_model)
-        return tensor
-
-
-class LayerNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-12):
-        super(LayerNorm, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(d_model))
-        self.beta = nn.Parameter(torch.zeros(d_model))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        var = x.var(-1, unbiased=False, keepdim=True)
-        # '-1' means last dimension. 
-
-        out = (x - mean) / torch.sqrt(var + self.eps)
-        out = self.gamma * out + self.beta
         return out

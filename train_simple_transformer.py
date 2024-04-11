@@ -39,20 +39,20 @@ def _gen_pad_mask_base(x):
     """ Example (F position is masked):
     >>> PAD_IDX = 1
     >>> _gen_pad_mask_base(torch.tensor([[2, 4, 5, 3], [2, 4, 3, 1]]))
-    tensor([[T, T, T, T],
-            [T, T, T, F]])
+    tensor([[F, F, F, F],
+            [F, F, F, T]])
     """
-    return (x != PAD_IDX)
+    return (x == PAD_IDX)
 
 
 def _gen_sub_mask_base(sz):
     """ Example (F position is masked):
     >>> _gen_sub_mask_base(3)
-    tensor([[T, F, F],
-            [T, T, F],
-            [T, T, T]])
+    tensor([[F, T, T],
+            [F, F, T],
+            [F, F, F]])
     """
-    return torch.tril(torch.ones(sz, sz)).type(torch.bool)
+    return torch.triu(torch.ones(sz, sz), diagonal=1).type(torch.bool)
 
 
 def make_src_mask(src):
@@ -66,7 +66,7 @@ def make_tgt_mask(tgt):
 
     tgt_sub_mask = _gen_sub_mask_base(tgt.shape[1]).to(tgt_pad_mask.device)
 
-    tgt_mask = tgt_pad_mask & tgt_sub_mask
+    tgt_mask = tgt_pad_mask | tgt_sub_mask
     return tgt_mask
 
 
@@ -82,8 +82,7 @@ print(f'The model has {count_parameters(transformer):,} trainable parameters')
 for name, p in transformer.named_parameters():
     if p.dim() > 1:
         nn.init.xavier_uniform_(p)
-    elif name.split('.')[-2] in ['w_q', 'w_k', 'w_v', 'w_concat']:
-        # print(f'Init {name} {p.shape} with 0')
+    elif 'proj' in name:
         nn.init.constant_(p, 0.)
 
 transformer = transformer.to(DEVICE)

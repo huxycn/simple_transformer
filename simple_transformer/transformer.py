@@ -107,7 +107,7 @@ class TransformerEncoderLayer(Module):
 
     # self-attention block
     def _sa_block(self, x, src_mask):
-        x = self.self_attn(x, x, x, mask=src_mask)
+        x = self.self_attn(x, x, x, attn_mask=src_mask)
         return self.dropout1(x)
 
     # feed forward block
@@ -145,13 +145,13 @@ class TransformerDecoderLayer(Module):
 
     # self-attention block
     def _sa_block(self, x, tgt_mask):
-        x = self.self_attn(x, x, x, mask=tgt_mask)
+        x = self.self_attn(x, x, x, attn_mask=tgt_mask)
 
         return self.dropout1(x)
 
     # multihead attention block
     def _mha_block(self, x, mem, mem_mask):
-        x = self.multihead_attn(x, mem, mem, mask=mem_mask)
+        x = self.multihead_attn(x, mem, mem, attn_mask=mem_mask)
         return self.dropout2(x)
 
     # feed forward block
